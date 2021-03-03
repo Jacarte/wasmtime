@@ -233,7 +233,7 @@ impl Parse for Literal {
 
 #[derive(Debug, Clone)]
 pub struct CtxConf {
-    pub name: Ident,
+    pub name: syn::Type,
 }
 
 impl Parse for CtxConf {

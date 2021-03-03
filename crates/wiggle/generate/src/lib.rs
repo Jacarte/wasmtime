@@ -66,10 +66,8 @@ pub fn generate(doc: &witx::Document, names: &Names, settings: &CodegenSettings)
             .funcs()
             .map(|f| define_func(&names, &module, &f, &settings));
         let modtrait = define_module_trait(&names, &module, &settings);
-        let ctx_type = names.ctx_type();
         quote!(
             pub mod #modname {
-                use super::#ctx_type;
                 use super::types::*;
                 #(#fs)*
 

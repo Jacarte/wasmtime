@@ -93,7 +93,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     let config = parse_macro_input!(args as wiggle_generate::Config);
 
     let doc = config.load_document();
-    let names = wiggle_generate::Names::new(&config.ctx.name, quote!(wiggle));
+    let names = wiggle_generate::Names::new(quote!(wiggle));
 
     let error_transform =
         wiggle_generate::CodegenSettings::new(&config.errors, &config.async_, &doc)

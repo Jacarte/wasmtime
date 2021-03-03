@@ -16,7 +16,6 @@ pub fn define_func(
 ) -> TokenStream {
     let rt = names.runtime_mod();
     let ident = names.func(&func.name);
-    let ctx_type = names.ctx_type();
 
     let (wasm_params, wasm_results) = func.wasm_signature();
     let param_names = (0..wasm_params.len())
@@ -37,6 +36,7 @@ pub fn define_func(
     };
 
     let mut body = TokenStream::new();
+    let mut required_impls = vec![names.trait_name(&module.name)];
     func.call_interface(
         &module.name,
         &mut Rust {
@@ -49,6 +49,7 @@ pub fn define_func(
             module,
             funcname: func.name.as_str(),
             settings,
+            required_impls: &mut required_impls,
         },
     );
 
@@ -62,7 +63,7 @@ pub fn define_func(
     quote! {
         #[allow(unreachable_code)] // deals with warnings in noreturn functions
         pub #asyncness fn #ident(
-            ctx: &#ctx_type,
+            ctx: &(impl #(#required_impls)+*),
             memory: &dyn #rt::GuestMemory,
             #(#abi_params),*
         ) -> Result<#abi_ret, #rt::Trap> {
@@ -91,6 +92,15 @@ struct Rust<'a> {
     module: &'a witx::Module,
     funcname: &'a str,
     settings: &'a CodegenSettings,
+    required_impls: &'a mut Vec<Ident>,
+}
+
+impl Rust<'_> {
+    fn required_impl(&mut self, i: Ident) {
+        if !self.required_impls.contains(&i) {
+            self.required_impls.push(i);
+        }
+    }
 }
 
 impl witx::Bindgen for Rust<'_> {
@@ -242,6 +252,7 @@ impl witx::Bindgen for Rust<'_> {
                 let val = match self.settings.errors.for_name(ty) {
                     Some(custom) => {
                         let method = self.names.user_error_conversion_method(&custom);
+                        self.required_impl(quote::format_ident!("UserErrorConversion"));
                         quote!(UserErrorConversion::#method(ctx, #val)?)
                     }
                     None => val,

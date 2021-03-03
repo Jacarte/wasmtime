@@ -12,7 +12,6 @@ use {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub witx: WitxConf,
-    pub ctx: CtxConf,
     pub errors: ErrorConf,
     pub async_: AsyncConf,
 }
@@ -20,7 +19,6 @@ pub struct Config {
 #[derive(Debug, Clone)]
 pub enum ConfigField {
     Witx(WitxConf),
-    Ctx(CtxConf),
     Error(ErrorConf),
     Async(AsyncConf),
 }
@@ -28,7 +26,6 @@ pub enum ConfigField {
 mod kw {
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
-    syn::custom_keyword!(ctx);
     syn::custom_keyword!(errors);
     syn::custom_keyword!(r#async);
 }
@@ -44,10 +41,6 @@ impl Parse for ConfigField {
             input.parse::<kw::witx_literal>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Witx(WitxConf::Literal(input.parse()?)))
-        } else if lookahead.peek(kw::ctx) {
-            input.parse::<kw::ctx>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ConfigField::Ctx(input.parse()?))
         } else if lookahead.peek(kw::errors) {
             input.parse::<kw::errors>()?;
             input.parse::<Token![:]>()?;
@@ -65,7 +58,6 @@ impl Parse for ConfigField {
 impl Config {
     pub fn build(fields: impl Iterator<Item = ConfigField>, err_loc: Span) -> Result<Self> {
         let mut witx = None;
-        let mut ctx = None;
         let mut errors = None;
         let mut async_ = None;
         for f in fields {
@@ -75,12 +67,6 @@ impl Config {
                         return Err(Error::new(err_loc, "duplicate `witx` field"));
                     }
                     witx = Some(c);
-                }
-                ConfigField::Ctx(c) => {
-                    if ctx.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `ctx` field"));
-                    }
-                    ctx = Some(c);
                 }
                 ConfigField::Error(c) => {
                     if errors.is_some() {
@@ -100,9 +86,6 @@ impl Config {
             witx: witx
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
-            ctx: ctx
-                .take()
-                .ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
             errors: errors.take().unwrap_or_default(),
             async_: async_.take().unwrap_or_default(),
         })
@@ -228,19 +211,6 @@ impl AsRef<str> for Literal {
 impl Parse for Literal {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(Self(input.parse::<syn::LitStr>()?.value()))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct CtxConf {
-    pub name: syn::Type,
-}
-
-impl Parse for CtxConf {
-    fn parse(input: ParseStream) -> Result<Self> {
-        Ok(CtxConf {
-            name: input.parse()?,
-        })
     }
 }
 

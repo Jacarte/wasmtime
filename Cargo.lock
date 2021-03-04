@@ -3510,6 +3510,8 @@ dependencies = [
 name = "wasmtime-wiggle"
 version = "0.23.0"
 dependencies = [
+ "anyhow",
+ "proptest",
  "wasmtime",
  "wasmtime-wiggle-macro",
  "wiggle",

@@ -190,47 +190,52 @@ fn generate_func(
 
     let runtime = names.runtime_mod();
 
-    let (async_, await_, returntype) = if is_async {
-        (
-            quote!(async),
-            quote!(.await),
-            quote!(impl std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>),
-        )
-    } else {
-        (
-            quote!(),
-            quote!(),
-            quote!( Result<#ret_ty, wasmtime::Trap> ),
-        )
-    };
+    let await_ = if is_async { quote!(.await) } else { quote!() };
 
-    quote! {
+    let closure_body = quote! {
+        unsafe {
+            let mem = match caller.get_export("memory") {
+                Some(wasmtime::Extern::Memory(m)) => m,
+                _ => {
+                    return Err(wasmtime::Trap::new("missing required memory export"));
+                }
+            };
+            let mem = #runtime::WasmtimeGuestMemory::new(mem);
+            let result = #target_module::#name_ident(
+                &mut *my_cx.borrow_mut(),
+                &mem,
+                #(#arg_names),*
+            ) #await_;
+            match result {
+                Ok(r) => Ok(r.into()),
+                Err(wasmtime_wiggle::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
+                Err(wasmtime_wiggle::Trap::I32Exit(err)) => Err(wasmtime::Trap::i32_exit(err)),
+            }
+        }
+
+    };
+    if is_async {
+        let wrapper = quote::format_ident!("wrap{}_async", params.len());
+        quote! {
         let my_cx = cx.clone();
-        let #name_ident = wasmtime::Func::wrap(
+        let #name_ident = wasmtime::Func::#wrapper(
             store,
-            move |caller: wasmtime::Caller<'_> #(,#arg_decls)*| -> #returntype {
-                #async_ {
-                unsafe {
-                    let mem = match caller.get_export("memory") {
-                        Some(wasmtime::Extern::Memory(m)) => m,
-                        _ => {
-                            return Err(wasmtime::Trap::new("missing required memory export"));
-                        }
-                    };
-                    let mem = #runtime::WasmtimeGuestMemory::new(mem);
-                    let result = #target_module::#name_ident(
-                        &mut *my_cx.borrow_mut(),
-                        &mem,
-                        #(#arg_names),*
-                    ) #await_;
-                    match result {
-                        Ok(r) => Ok(r.into()),
-                        Err(wasmtime_wiggle::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
-                        Err(wasmtime_wiggle::Trap::I32Exit(err)) => Err(wasmtime::Trap::i32_exit(err)),
-                    }
-                }
-                }
+            move |caller: wasmtime::Caller<'_> #(,#arg_decls)*|
+              -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>>
+            {
+                Box::new(async move { #closure_body })
             }
         );
+        }
+    } else {
+        quote! {
+            let my_cx = cx.clone();
+            let #name_ident = wasmtime::Func::wrap(
+                store,
+                move |caller: wasmtime::Caller<'_> #(,#arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                    #closure_body
+                }
+            );
+        }
     }
 }

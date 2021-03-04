@@ -179,8 +179,13 @@ pub mod utils {
     pub const FUNCTION_PREFIX: &str = "_wasm_function_";
     pub const TRAMPOLINE_PREFIX: &str = "_trampoline_";
 
-    pub fn func_symbol_name(index: FuncIndex) -> String {
+    /*pub fn func_symbol_name(index: FuncIndex) -> String {
         format!("_wasm_function_{}", index.index())
+    }*/
+
+
+    pub fn func_symbol_name(_index: FuncIndex, realname: String) -> String {
+        format!("_wasm_function_{}", realname)
     }
 
     pub fn try_parse_func_name(name: &str) -> Option<FuncIndex> {
@@ -315,8 +320,15 @@ impl<'a> ObjectBuilder<'a> {
         // Create symbols for imports -- needed during linking.
         let mut func_symbols = PrimaryMap::with_capacity(self.compilation.len());
         for index in 0..module.num_imported_funcs {
+            let func_index = FuncIndex::new(index);
+
+            let func_name = match module.func_names.get(&func_index) {
+                Some(s) => s.clone(),
+                None => format!("{}", index),
+            };
+
             let symbol_id = obj.add_symbol(Symbol {
-                name: utils::func_symbol_name(FuncIndex::new(index))
+                name: utils::func_symbol_name(func_index, func_name)
                     .as_bytes()
                     .to_vec(),
                 value: 0,
@@ -351,7 +363,12 @@ impl<'a> ObjectBuilder<'a> {
 
         // Create symbols and section data for the compiled functions.
         for (index, func) in self.compilation.iter() {
-            let name = utils::func_symbol_name(module.func_index(index))
+            let func_name = match module.func_names.get(&module.func_index(index)) {
+                Some(s) => s.clone(),
+                None => format!("{}", index.index()),
+            };
+
+            let name = utils::func_symbol_name(module.func_index(index), func_name)
                 .as_bytes()
                 .to_vec();
             let symbol_id = append_func(name, func);
